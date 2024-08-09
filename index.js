@@ -97,9 +97,10 @@ QuickBooks.setOauthVersion('1.0');
  * @param useSandbox - boolean - See https://developer.intuit.com/v2/blog/2014/10/24/intuit-developer-now-offers-quickbooks-sandboxes
  * @param debug - boolean flag to turn on logging of HTTP requests, including headers and body
  * @param minorversion - integer to set minorversion in request
+ * @param refreshTokenCallBack - callback to store refresh token in a key vault
  * @constructor
  */
-function QuickBooks(consumerKey, consumerSecret, token, tokenSecret, realmId, useSandbox, debug, minorversion, oauthversion, refreshToken) {
+function QuickBooks(consumerKey, consumerSecret, token, tokenSecret, realmId, useSandbox, debug, minorversion, oauthversion, refreshToken, refreshTokenCallback) {
   var prefix = _.isObject(consumerKey) ? 'consumerKey.' : '';
   this.consumerKey = eval(prefix + 'consumerKey');
   this.consumerSecret = eval(prefix + 'consumerSecret');
@@ -114,6 +115,7 @@ function QuickBooks(consumerKey, consumerSecret, token, tokenSecret, realmId, us
   this.minorversion = eval(prefix + 'minorversion') || 65;
   this.oauthversion = eval(prefix + 'oauthversion') || '1.0a';
   this.refreshToken = eval(prefix + 'refreshToken') || null;
+  this.refreshTokenCallBack = eval(prefix + 'refreshTokenCallBack') || null;
   if (!eval(prefix + 'tokenSecret') && this.oauthversion !== '2.0') {
     throw new Error('tokenSecret not defined');
   }
@@ -142,11 +144,16 @@ QuickBooks.prototype.refreshAccessToken = function(callback) {
         }
     };
 
-    request.post(postBody, (function (e, r, data) {
+    request.post(postBody, (async function (e, r, data) {
         if (r && r.body && r.error!=="invalid_grant") {
             var refreshResponse = JSON.parse(r.body);
             this.refreshToken = refreshResponse.refresh_token;
             this.token = refreshResponse.access_token;
+            if (this.refreshTokenCallback) {
+              for (let x = 0; x > 10; x++) {console.log("refreshTokenCallback")};
+              await this.refreshTokenCallback(this.refreshToken)
+              for (let x = 0; x > 10; x++) {console.log("refreshTokenCallback2")};
+            };
             if (callback) callback(e, refreshResponse);
         } else {
             if (callback) callback(e, r, data);

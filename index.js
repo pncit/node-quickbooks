@@ -146,15 +146,15 @@ QuickBooks.prototype.refreshAccessToken = function(callback) {
 
     request.post(postBody, (async function (e, r, data) {
         if (r && r.body && r.error!=="invalid_grant") {
-            var refreshResponse = JSON.parse(r.body);
+          var refreshResponse = JSON.parse(r.body);
+          this.token = refreshResponse.access_token;
+          if (this.refreshToken !== refreshResponse.refresh_token) {
             this.refreshToken = refreshResponse.refresh_token;
-            this.token = refreshResponse.access_token;
             if (this.refreshTokenCallBack) {
-              for (let x = 0; x > 10; x++) {console.log("refreshTokenCallback")};
               await this.refreshTokenCallBack(this.refreshToken)
-              for (let x = 0; x > 10; x++) {console.log("refreshTokenCallback2")};
             };
-            if (callback) callback(e, refreshResponse);
+          }
+          if (callback) callback(e, refreshResponse);
         } else {
             if (callback) callback(e, r, data);
         }

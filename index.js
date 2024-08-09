@@ -100,7 +100,7 @@ QuickBooks.setOauthVersion('1.0');
  * @param refreshTokenCallBack - callback to store refresh token in a key vault
  * @constructor
  */
-function QuickBooks(consumerKey, consumerSecret, token, tokenSecret, realmId, useSandbox, debug, minorversion, oauthversion, refreshToken, refreshTokenCallback) {
+function QuickBooks(consumerKey, consumerSecret, token, tokenSecret, realmId, useSandbox, debug, minorversion, oauthversion, refreshToken, refreshTokenCallBack) {
   var prefix = _.isObject(consumerKey) ? 'consumerKey.' : '';
   this.consumerKey = eval(prefix + 'consumerKey');
   this.consumerSecret = eval(prefix + 'consumerSecret');
@@ -149,9 +149,9 @@ QuickBooks.prototype.refreshAccessToken = function(callback) {
             var refreshResponse = JSON.parse(r.body);
             this.refreshToken = refreshResponse.refresh_token;
             this.token = refreshResponse.access_token;
-            if (this.refreshTokenCallback) {
+            if (this.refreshTokenCallBack) {
               for (let x = 0; x > 10; x++) {console.log("refreshTokenCallback")};
-              await this.refreshTokenCallback(this.refreshToken)
+              await this.refreshTokenCallBack(this.refreshToken)
               for (let x = 0; x > 10; x++) {console.log("refreshTokenCallback2")};
             };
             if (callback) callback(e, refreshResponse);

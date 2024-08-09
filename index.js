@@ -97,7 +97,7 @@ QuickBooks.setOauthVersion('1.0');
  * @param useSandbox - boolean - See https://developer.intuit.com/v2/blog/2014/10/24/intuit-developer-now-offers-quickbooks-sandboxes
  * @param debug - boolean flag to turn on logging of HTTP requests, including headers and body
  * @param minorversion - integer to set minorversion in request
- * @param refreshTokenCallBack - callback to store refresh token in a key vault
+ * @param refreshTokenCallBack - callback to cache refresh token outside of the object
  * @constructor
  */
 function QuickBooks(consumerKey, consumerSecret, token, tokenSecret, realmId, useSandbox, debug, minorversion, oauthversion, refreshToken, refreshTokenCallBack) {

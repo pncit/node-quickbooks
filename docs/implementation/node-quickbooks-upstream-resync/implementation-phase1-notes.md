@@ -179,4 +179,4 @@ grep -cF 'refreshTokenCallBack' index.js    # confirmed 0 (correctly absent, to 
 I assert that:
 - Only Phase 1 has been implemented.
 - No unnecessary scope expansion occurred.
-- All quality scores are >= 9.5.
+- All quality scores are >= 8.5, with Plan Adherence at 8.5 due to the documented planning-doc side effect and the plan's omission of an artifact-survival exit-gate assertion (see §5 and §9).

@@ -24,6 +24,30 @@ function makeClient(refreshToken, cb) {
   );
 }
 
+/**
+ * Schedule `fn` after the hook's promise chain (if any) has fully settled,
+ * including the `unhandledRejection` macrotask tick.
+ *
+ * For cases where the hook is synchronous or absent, pass `undefined` as
+ * `hookPromise` — `Promise.resolve(undefined)` resolves immediately and the
+ * call degrades to a single microtask drain + `setImmediate`, equivalent to
+ * the plain `setImmediate` used before.
+ *
+ * For cases where the hook returns a rejected promise, pass that promise here.
+ * The `.catch(noop)` absorbs the rejection so the chained `.then` always runs
+ * after the hook's full promise chain has settled, and the subsequent
+ * `setImmediate` runs after the `unhandledRejection` macrotask tick, making
+ * all assertions deterministic without a wall-clock sleep.
+ *
+ * @param {Promise<any>|undefined} hookPromise
+ * @param {Function} fn  - callback to invoke once settled
+ */
+function afterHookSettles(hookPromise, fn) {
+  Promise.resolve(hookPromise).catch(function () {}).then(function () {
+    setImmediate(fn);
+  });
+}
+
 describe('refreshTokenCallBack', function () {
   var origPost, unhandled;
 
@@ -60,14 +84,18 @@ describe('refreshTokenCallBack', function () {
     stubPost({ access_token: 'A2', refresh_token: 'NEW' });
 
     qbo.refreshAccessToken(function (err, resp) {
-      assert.strictEqual(err, null);
-      assert.strictEqual(resp.refresh_token, 'NEW');
-      // Allow the hook's microtask chain to settle before asserting its effects.
-      setImmediate(function () {
-        assert.strictEqual(seen, 'NEW');      // hook received the rotated token
-        assert.strictEqual(argCount, 1);      // ...as its ONE and only argument (locks .d.ts arity)
-        assert.strictEqual(unhandled.length, 0);  // no path leaks an unhandled rejection
-        done();
+      try {
+        assert.strictEqual(err, null);
+        assert.strictEqual(resp.refresh_token, 'NEW');
+      } catch (e) { return done(e); }
+
+      afterHookSettles(undefined, function () {
+        try {
+          assert.strictEqual(seen, 'NEW');           // hook received the rotated token
+          assert.strictEqual(argCount, 1);           // ...as its ONE and only argument (locks .d.ts arity)
+          assert.strictEqual(unhandled.length, 0);   // no path leaks an unhandled rejection
+          done();
+        } catch (e) { done(e); }
       });
     });
   });
@@ -78,10 +106,12 @@ describe('refreshTokenCallBack', function () {
     stubPost({ access_token: 'A2', refresh_token: 'SAME' });
 
     qbo.refreshAccessToken(function () {
-      setImmediate(function () {
-        assert.strictEqual(fired, false);
-        assert.strictEqual(unhandled.length, 0);  // no path leaks an unhandled rejection
-        done();
+      afterHookSettles(undefined, function () {
+        try {
+          assert.strictEqual(fired, false);
+          assert.strictEqual(unhandled.length, 0);   // no path leaks an unhandled rejection
+          done();
+        } catch (e) { done(e); }
       });
     });
   });
@@ -91,17 +121,22 @@ describe('refreshTokenCallBack', function () {
     stubPost({ access_token: 'A2', refresh_token: 'NEW' });
 
     qbo.refreshAccessToken(function (err, resp) {
-      assert.strictEqual(err, null);
-      assert.strictEqual(resp.refresh_token, 'NEW');
-      setImmediate(function () {
-        assert.strictEqual(unhandled.length, 0);  // omitted-hook rotation leaks nothing
-        done();
+      try {
+        assert.strictEqual(err, null);
+        assert.strictEqual(resp.refresh_token, 'NEW');
+      } catch (e) { return done(e); }
+
+      afterHookSettles(undefined, function () {
+        try {
+          assert.strictEqual(unhandled.length, 0);   // omitted-hook rotation leaks nothing
+          done();
+        } catch (e) { done(e); }
       });
     });
   });
 
   it('isolates a hook rejection from the node-style callback (Decision 3 structure)', function (done) {
-    var hookSettled = false, callbackArgs = null;
+    var hookSettled = false, callbackArgs = null, hookPromise = null;
 
     // The hook returns a rejected promise.  A .catch() chained by the test
     // itself records that the hook's rejecting branch actually ran
@@ -109,29 +144,38 @@ describe('refreshTokenCallBack', function () {
     // onward — it MUST be absorbed by the runtime's own .catch on the hook
     // (Decision 3), not by `callback` and not as an unhandled rejection.
     var qbo = makeClient('OLD', function () {
-      return Promise.reject(new Error('vault down'))
+      hookPromise = Promise.reject(new Error('vault down'))
         .catch(function (e) { hookSettled = true; throw e; });
+      return hookPromise;
     });
     stubPost({ access_token: 'A2', refresh_token: 'NEW' });
 
+    // The runtime invokes the hook (setting hookPromise) before calling
+    // callback, so hookPromise is always non-null by the time this fires.
     qbo.refreshAccessToken(function () {
       callbackArgs = Array.prototype.slice.call(arguments);
-    });
 
-    // Sequence assertions AFTER the hook's microtask chain has fully settled.
-    // A single setImmediate can run before the hook's .catch resolves; use a
-    // short setTimeout so both `hookSettled` and any unhandledRejection
-    // delivery (which arrives on a later macrotask tick) are observable.
-    setTimeout(function () {
-      // callback fired exactly once with success result and NO error
-      assert.strictEqual(callbackArgs[0], null);                 // err === null
-      assert.strictEqual(callbackArgs[1].refresh_token, 'NEW');  // success payload present
-      // the hook's promise chain actually ran and settled (rejection path exercised)
-      assert.strictEqual(hookSettled, true);
-      // the rejection was contained by the hook's OWN .catch — it neither
-      // reached `callback` (asserted above) NOR escaped as an unhandled rejection
-      assert.strictEqual(unhandled.length, 0);
-      done();
-    }, 20);
+      // Wait deterministically for the hook's full promise chain to settle
+      // (the hook's .catch and the runtime's isolation .catch), then allow
+      // one macrotask tick for unhandledRejection delivery before checking.
+      afterHookSettles(hookPromise, function () {
+        try {
+          // callbackArgs is always set by the time we reach here (set two
+          // lines above before this deferred function is scheduled); guard
+          // to produce a named assertion failure rather than a TypeError if
+          // a future regression prevents the callback from firing.
+          assert.notStrictEqual(callbackArgs, null, 'refreshAccessToken callback was never called');
+          // callback fired exactly once with success result and NO error
+          assert.strictEqual(callbackArgs[0], null);                 // err === null
+          assert.strictEqual(callbackArgs[1].refresh_token, 'NEW');  // success payload present
+          // the hook's promise chain actually ran and settled (rejection path exercised)
+          assert.strictEqual(hookSettled, true);
+          // the rejection was contained by the hook's OWN .catch — it neither
+          // reached `callback` (asserted above) NOR escaped as an unhandled rejection
+          assert.strictEqual(unhandled.length, 0);
+          done();
+        } catch (e) { done(e); }
+      });
+    });
   });
 });

@@ -34,7 +34,7 @@ jobs:
       # would fail 100% of them.
       - name: Checkout (for version-bump check)
         if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 2
 

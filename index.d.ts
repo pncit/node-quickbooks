@@ -459,6 +459,7 @@ export class QuickBooks {
   minorversion: number | string;
   oauthversion: string;
   refreshToken?: string | null;
+  refreshTokenCallBack?: (token: string) => void | Promise<void>;
   endpoint: string;
 
   constructor(
@@ -471,7 +472,8 @@ export class QuickBooks {
     debug?: boolean,
     minorversion?: string | null,
     oauthversion?: string,
-    refreshToken?: string | null
+    refreshToken?: string | null,
+    refreshTokenCallBack?: (token: string) => void | Promise<void>
   );
 
   // Static properties

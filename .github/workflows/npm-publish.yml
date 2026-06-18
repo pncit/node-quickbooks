@@ -1,0 +1,67 @@
+name: Publish
+
+# Consumes the Validate workflow's result instead of re-validating: publish
+# only fires after a successful Validate run on master, and it ships the exact
+# SHA that Validate ran against. A new push re-runs Validate (and thus a fresh
+# publish); publish can never run without a successful validation for that
+# commit.
+#
+# NOTE: `workflows:` below must match the Validate workflow's `name:` field.
+on:
+  workflow_run:
+    workflows: ['Validate']
+    types: [completed]
+    branches: [master]
+  # Manual recovery — e.g. re-publishing master after a transient registry error.
+  # Skips the workflow_run gate; operator's call.
+  workflow_dispatch:
+
+permissions:
+  id-token: write # Required for OIDC trusted publishing
+  contents: read
+
+# Serialize publishes: a newer publish supersedes an in-progress older one.
+concurrency:
+  group: publish-node-quickbooks
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    # Only on a successful Validate that ran on master via push, or a manual
+    # dispatch. PR-branch Validate runs are filtered out here.
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success'
+        && github.event.workflow_run.head_branch == 'master'
+        && github.event.workflow_run.event == 'push')
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Pin to the commit Validate ran against, not master's current HEAD, so
+          # a commit landing between Validate's success and this trigger can't
+          # ship unvalidated. Empty for workflow_dispatch → falls back to the
+          # default ref.
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 2
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+          scope: '@pncit'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+
+      - name: Update npm
+        run: npm install -g npm@latest
+
+      - name: Install dependencies
+        run: npm ci
+
+      # No build step: this package ships index.js / index.d.ts directly.
+      # `npm publish` is a no-op failure if the version already exists, so a
+      # push without a version bump simply doesn't release.
+      - name: Publish to npm
+        run: npm publish

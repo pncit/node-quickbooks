@@ -1,0 +1,81 @@
+name: Validate
+
+on:
+  pull_request:
+    branches: [master]
+  # Also runs on the merge commit so npm-publish.yml can consume this run's
+  # `workflow_run` success instead of re-validating. Running validation here
+  # (not in the publish workflow) means publish never ships a commit that
+  # wasn't validated as-is, and validation is never duplicated.
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: self-hosted
+    steps:
+      # Env check: fail fast if the runner's Node/npm majors don't match what
+      # the repo expects (NODE_MAJOR_VERSION / NPM_MAJOR_VERSION are pncit
+      # org-level Actions variables).
+      - uses: pncit/shared-actions/.github/actions/verify-node-toolchain@v1
+        with:
+          node-major-version: ${{ vars.NODE_MAJOR_VERSION }}
+          npm-major-version: ${{ vars.NPM_MAJOR_VERSION }}
+
+      # Version-bump gate (PRs only): @pncit/node-quickbooks is a published
+      # library, so every PR into master must bump package.json's version. Needs
+      # its own shallow checkout to diff the base branch's package.json.
+      #
+      # Dependabot PRs are exempt: they bump dependency versions, never the
+      # package's own version (that happens at release time), so this gate
+      # would fail 100% of them.
+      - name: Checkout (for version-bump check)
+        if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Verify version changed
+        if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
+        shell: bash
+        run: |
+          set -euo pipefail
+          CUR=$(node -p "require('./package.json').version || ''")
+
+          # Get the base branch (usually master)
+          BASE_BRANCH="${GITHUB_BASE_REF:-master}"
+          git fetch origin "$BASE_BRANCH:$BASE_BRANCH" || true
+
+          if git rev-parse --verify "$BASE_BRANCH" >/dev/null 2>&1; then
+            PREV=$(git show "$BASE_BRANCH:package.json" 2>/dev/null \
+              | node -p "(() => { const s=require('fs').readFileSync(0,'utf8'); try { return JSON.parse(s).version || '' } catch { return '' } })()" \
+              || true)
+          else
+            PREV=""
+          fi
+
+          if [ -z "$CUR" ]; then
+            echo "::error::No version found in package.json"
+            exit 1
+          fi
+
+          if [ -n "$PREV" ] && [ "$CUR" = "$PREV" ]; then
+            echo "::error::package.json version unchanged ($PREV -> $CUR). Version must be bumped for PRs."
+            exit 1
+          fi
+
+          if [ -z "$PREV" ]; then
+            echo "Could not determine previous version, skipping version check"
+          else
+            echo "Version changed: $PREV -> $CUR ✓"
+          fi
+
+      # Codebase checks: npm ci + lint + typecheck + test. This action does its
+      # own checkout + setup-node (node-version-file: .nvmrc) and matches the
+      # @pncit scope / npmjs registry by default.
+      - uses: pncit/shared-actions/.github/actions/validate-codebase@v1
+        with:
+          npm-token: ${{ secrets.NPM_TOKEN }}

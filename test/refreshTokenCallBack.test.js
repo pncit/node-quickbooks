@@ -25,19 +25,22 @@ function makeClient(refreshToken, cb) {
 }
 
 /**
- * Schedule `fn` after the hook's promise chain (if any) has fully settled,
- * including the `unhandledRejection` macrotask tick.
+ * Schedule `fn` after the hook's own promise (if any) has fully settled,
+ * then after one macrotask tick for `unhandledRejection` delivery.
  *
  * For cases where the hook is synchronous or absent, pass `undefined` as
- * `hookPromise` — `Promise.resolve(undefined)` resolves immediately and the
- * call degrades to a single microtask drain + `setImmediate`, equivalent to
- * the plain `setImmediate` used before.
+ * `hookPromise` — `Promise.resolve(undefined)` resolves immediately; the
+ * chained `.catch` and `.then` each run as a separate microtask before the
+ * `setImmediate` macrotask fires.
  *
  * For cases where the hook returns a rejected promise, pass that promise here.
- * The `.catch(noop)` absorbs the rejection so the chained `.then` always runs
- * after the hook's full promise chain has settled, and the subsequent
- * `setImmediate` runs after the `unhandledRejection` macrotask tick, making
- * all assertions deterministic without a wall-clock sleep.
+ * The `.catch` absorbs the rejection so the chained `.then` always runs after
+ * the hook's own returned promise has settled.  The runtime's isolation
+ * `.catch` (in `index.js`) is chained off the same rejected promise and is
+ * therefore guaranteed to have run within the same microtask flush, before
+ * the `setImmediate` macrotask fires.  The subsequent `setImmediate` then
+ * runs after the `unhandledRejection` macrotask tick, making all assertions
+ * deterministic without a wall-clock sleep.
  *
  * @param {Promise<any>|undefined} hookPromise
  * @param {Function} fn  - callback to invoke once settled
@@ -155,9 +158,10 @@ describe('refreshTokenCallBack', function () {
     qbo.refreshAccessToken(function () {
       callbackArgs = Array.prototype.slice.call(arguments);
 
-      // Wait deterministically for the hook's full promise chain to settle
-      // (the hook's .catch and the runtime's isolation .catch), then allow
-      // one macrotask tick for unhandledRejection delivery before checking.
+      // Wait deterministically for the hook's own returned promise to settle,
+      // then allow one macrotask tick for unhandledRejection delivery before
+      // checking.  The runtime's isolation .catch is chained off the same
+      // rejected promise and is guaranteed to have run by then.
       afterHookSettles(hookPromise, function () {
         try {
           // callbackArgs is always set by the time we reach here (set two

@@ -1,0 +1,6 @@
+## reviser — round 2
+
+| ID | Disposition | Rationale (and, for Fixed, what changed) |
+|----|-------------|-------------------------------------------|
+| engineer-r2-f1 | Fixed | Corrected the `afterHookSettles` JSDoc at `test/refreshTokenCallBack.test.js:27-47`. Replaced "degrades to a single microtask drain + `setImmediate`" with accurate wording: "`Promise.resolve(undefined)` resolves immediately; the chained `.catch` and `.then` each run as a separate microtask before the `setImmediate` macrotask fires." The "single microtask drain" phrasing is gone. |
+| engineer-r2-f2 | Fixed | Tightened both affected locations. (1) The JSDoc (lines 36-44) now states the helper awaits "the hook's own returned promise" and explains that the runtime's isolation `.catch` "is chained off the same rejected promise and is therefore guaranteed to have run within the same microtask flush, before the `setImmediate` macrotask fires." (2) The inline comment at line 161-164 inside case 4 was updated to match: "Wait deterministically for the hook's own returned promise to settle … The runtime's isolation `.catch` is chained off the same rejected promise and is guaranteed to have run by then." The overstatement that the helper awaits "the hook's full promise chain including the runtime's isolation `.catch`" is removed from both locations. |

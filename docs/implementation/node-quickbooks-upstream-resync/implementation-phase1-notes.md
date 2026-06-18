@@ -78,7 +78,11 @@ Phase 1 is a precondition-gated hard reset. Before overwriting the fork's histor
 
 ## 5. Deviations From Plan
 
-No deviations. All steps executed exactly as specified in the plan.
+**Unanticipated side effect — planning-doc destruction.** The plan's Assumptions sanctioned rewriting the fork's *code* history, not destroying the in-repo planning record. However, because `plan.md`, `design.md`, and all 20 review artifacts under `review-design/` and `review-plan/` were tracked on the same branch that was reset, the hard reset removed them from the working tree and orphaned their commits from the branch ref. The plan did not enumerate an artifact-survival assertion in the exit gate, so this was not caught before the reset ran.
+
+**Remediation (applied in revision round 1).** All 22 planning-artifact files were restored via `git checkout 04c4d8c -- docs/…` and committed to the branch, making them reachable from `feat/node-quickbooks-upstream-resync`. Verified: `git ls-files docs/ | wc -l` = 24; `plan.md` and `design.md` exist on disk and are tracked.
+
+**Plan gap noted.** Phase 1's post-reset sanity checks had no assertion confirming that the planning artifacts survived the destructive operation. A gate of the form `test -f docs/implementation/node-quickbooks-upstream-resync/plan.md` would have caught this immediately. Flagged here for the Planner; not re-running Phase 1 since the content has been remediated.
 
 ---
 
@@ -111,16 +115,14 @@ No tests authored in Phase 1. The reset brings in upstream's `test/` live suites
 | Extensibility | 10 | Phase is a pure git operation; no code structure decisions to extensibility-score beyond the correctness of the gate assertions. |
 | Understandability | 10 | Every gate step is explicitly labeled; pass/fail reported. The diff backstop skim is documented with its conclusion. |
 | Best Practices | 10 | Preconditions verified before destructive operation; count-based grep avoids false-negative zero-match exit codes; fixed-string grep avoids regex metachar false-matches; post-reset tree verified source-only (no module load before install). |
-| Plan Adherence | 10 | All seven precondition checks run; all seven exit-gate assertions pass; no module-load gate run (correctly deferred to Phase 3 per plan); no code edits; no `npm install`. |
+| Plan Adherence | 8.5 | All seven precondition checks run; all seven code exit-gate assertions pass; no module-load gate run (correctly deferred to Phase 3 per plan); no code edits; no `npm install`. Score reduced: the plan's exit gate omitted an artifact-survival assertion, and the reset's destructive side effect on tracked planning docs was not anticipated or caught before it occurred. Content remediated in revision round 1 (see §5). |
 | Test Quality | 10 | No tests in this phase per plan; the absence is intentional and documented. |
-
-All scores >= 9.5. No iterative improvement required.
 
 ---
 
 ## 10. Iterative Improvements Made
 
-None required. All scores were >= 9.5 on first pass. The best-effort diff skim was performed and documented as advisory-only (no stop triggers found), consistent with the plan's framing.
+The best-effort diff skim was performed and documented as advisory-only (no stop triggers found), consistent with the plan's framing. In revision round 1: planning artifacts were restored and the phase notes were updated to surface the planning-doc side effect and correct the Plan Adherence score.
 
 ---
 

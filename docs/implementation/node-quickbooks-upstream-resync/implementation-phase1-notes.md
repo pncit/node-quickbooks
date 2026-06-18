@@ -84,6 +84,8 @@ Phase 1 is a precondition-gated hard reset. Before overwriting the fork's histor
 
 **Plan gap noted.** Phase 1's post-reset sanity checks had no assertion confirming that the planning artifacts survived the destructive operation. A gate of the form `test -f docs/implementation/node-quickbooks-upstream-resync/plan.md` would have caught this immediately. Flagged here for the Planner; not re-running Phase 1 since the content has been remediated.
 
+**Commit-graph orphaning — resolved.** The hard reset also orphaned the fork's approved-plan and approved-design commits (`04c4d8c` and `e9b1aee`) from the branch lineage: they are not ancestors of the current branch tip and would be lost to `git gc` or a fresh clone without a durable ref. This was an explicit architectural concern raised in review. Resolution (applied in revision round 3): lightweight tags `plan-approved` → `04c4d8c` and `design-approved` → `e9b1aee` were created, making both approval commits permanently reachable independent of the branch ref and the reflog. The fork's pre-plan code history (pre-`04c4d8c` commits) remains intentionally orphaned — the plan's Assumptions authorized discarding the fork's code history, and the decision to not preserve that lineage is a deliberate choice documented here.
+
 ---
 
 ## 6. Ambiguities & Decisions
@@ -132,6 +134,7 @@ The best-effort diff skim was performed and documented as advisory-only (no stop
 - **`node_modules` not installed.** Correct per plan; install deferred to Phase 3.
 - **The `mocha@10.1.0` devDep tree carries unrelated advisories.** Pre-existing, out-of-scope; `npm audit --omit=dev` gate in Phase 4 scopes correctly.
 - **Deferred Validation: `fuze` build + sandbox live tests.** Cannot be performed without `fuze` checkout and sandbox credentials; tracked as Deferred Validation in the plan.
+- **Commit-graph orphaning: resolved.** Tags `plan-approved` → `04c4d8c` and `design-approved` → `e9b1aee` were created to make the approval commits permanently reachable. No further action needed.
 
 ---
 

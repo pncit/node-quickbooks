@@ -142,6 +142,9 @@ QuickBooks.prototype.refreshAccessToken = function (callback) {
     if (this.refreshToken !== refreshResponse.refresh_token) {
       this.refreshToken = refreshResponse.refresh_token;
       if (this.refreshTokenCallBack) {
+        // Fire-and-forget with its own .catch: a hook rejection must NOT reach the node-style
+        // callback below. Do NOT await this inside the .then — that would silently break the
+        // error-isolation contract and allow a hook failure to suppress the caller's success result.
         Promise.resolve(this.refreshTokenCallBack(this.refreshToken)).catch((function (e) {
           if (this.debug) console.log('refreshTokenCallBack failed to persist rotated token:', e);
         }).bind(this));

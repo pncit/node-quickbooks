@@ -48,7 +48,7 @@ Phase 4 applies the three security bumps that the upstream reset alone did not c
 - `"uuid": "^8.3.2"` → `"uuid": "^11.1.1"` — clears moderate advisory GHSA-w5hq-g745-h8pq (fixed `>=11.1.1`); pinned to the last major that ships a dual CJS/ESM build (exports a `require` conditional that resolves to `./dist/cjs/index.js` under Node's conditional exports). `uuid@14.x` is ESM-only (no `require` conditional export; both `node` and `default` conditions point at ESM), which works under Node ≥22 synchronous `require(esm)` but throws `ERR_REQUIRE_ESM` on older runtimes. Pinning to `^11.1.1` preserves `require('uuid')` compatibility across all Node versions and clears the advisory at the minimum advisory-fix boundary. `uuid.v1()` still resolves from the CJS build. All other dependencies left at upstream's pins.
 
 **Step 2 — Clean lockfile regeneration:**
-- `rm -rf node_modules package-lock.json && npm install` produced a fresh `package-lock.json` resolving `underscore@1.13.8`, `fast-xml-parser@5.9.2`, `uuid@14.0.0` (confirmed with `npm ls`). No stale `request`/`request-debug` transitive entries remain.
+- `rm -rf node_modules package-lock.json && npm install` produced a fresh `package-lock.json` resolving `underscore@1.13.8`, `fast-xml-parser@5.9.2`, `uuid@11.1.1` (confirmed with `npm ls`). No stale `request`/`request-debug` transitive entries remain.
 
 **Step 3 — Falsifiable audit gate:**
 - `npm audit --omit=dev --json`: `.metadata.vulnerabilities.total = 0`. Production tree is advisory-free.
@@ -78,14 +78,14 @@ No deviations.
 
 ## 7. Tests
 
-No new tests in this phase. Phase 3's `test/refreshTokenCallBack.test.js` was re-run against the bumped dependency tree and all 4 cases passed, proving the `fast-xml-parser@5.x` and `uuid@14.0.0` bumps do not regress the feature's runtime behavior.
+No new tests in this phase. Phase 3's `test/refreshTokenCallBack.test.js` was re-run against the bumped dependency tree and all 4 cases passed, proving the `fast-xml-parser@5.x` and `uuid@11.1.1` bumps do not regress the feature's runtime behavior.
 
 ---
 
 ## 8. Security & Best-Practices Review
 
 - **Audit scope is correct:** `--omit=dev` is deliberately used because the `mocha` devDep tree's advisories are (a) out of scope for issue-#3 (which targets the production exposure `fuze` inherits) and (b) explicitly called out in the plan's Assumptions. `fuze` installs only production deps via its git pin.
-- **Caret pins are intentional and consistent:** `^1.13.8`, `^5.9.2`, `^14.0.0` all float within the verified major, accepting future patch/minor releases while bounding to the tested major. This is the same strategy as upstream's `axios`/`oauth-1.0a`/`form-data` pins.
+- **Caret pins are intentional and consistent:** `^1.13.8`, `^5.9.2`, `^11.1.1` all float within the verified major, accepting future patch/minor releases while bounding to the tested major. This is the same strategy as upstream's `axios`/`oauth-1.0a`/`form-data` pins.
 - **uuid major bump is safe for the one call site and preserves CJS compatibility:** `uuid.v1()` is not the vulnerable API path (that was `v3`/`v5`/`v6`). Pinned to `^11.1.1` — the minimum fix boundary — because `uuid@11.x` ships a dual CJS/ESM build with a `require` conditional export resolving to `./dist/cjs/index.js`, making it safe under `require('uuid')` on all Node versions with conditional-exports support (Node ≥12). `uuid@14.x` is ESM-only (no CJS conditional) and would throw `ERR_REQUIRE_ESM` on Node runtimes older than the stable synchronous `require(esm)` support (introduced in Node 20.19/22). The smoke check confirms CommonJS `require('uuid').v1` resolves and returns a valid UUID under `11.1.1`.
 - **No new direct dependencies added:** zero new direct or devDependencies introduced. The changes are strictly version bumps of existing direct dependencies. However, `fast-xml-parser@5.x` introduces new transitive packages not present under `4.x`: `@nodable/entities`, `fast-xml-builder`, `is-unsafe`, `path-expression-matcher`, `strnum`, `xml-naming`, and `anynum` (transitive via `strnum`). All are MIT-licensed and internal to the parser's 5.x implementation. All are present in the production `--omit=dev` audit result and contribute to the confirmed `total: 0` advisories.
 - **No secrets or unsafe patterns:** this phase is purely dependency version changes and lockfile regeneration.
@@ -129,14 +129,14 @@ npx mocha test/refreshTokenCallBack.test.js
 # Step 1: bump three deps in package.json (via Edit tool)
 #   fast-xml-parser: ^4.3.2 -> ^5.9.2
 #   underscore: 1.12.1 -> ^1.13.8
-#   uuid: ^8.3.2 -> ^14.0.0
+#   uuid: ^8.3.2 -> ^11.1.1
 
 # Step 2: clean regen
 rm -rf node_modules package-lock.json && npm install
 
 # Resolved version check
 npm ls underscore fast-xml-parser uuid
-# -> fast-xml-parser@5.9.2, underscore@1.13.8, uuid@14.0.0
+# -> fast-xml-parser@5.9.2, underscore@1.13.8, uuid@11.1.1
 
 # Step 3: falsifiable audit gate
 npm audit --omit=dev --json | python3 -c "import sys,json; d=json.load(sys.stdin); print('total:', d['metadata']['vulnerabilities']['total']); print('keys:', list(d.get('vulnerabilities', {}).keys()))"

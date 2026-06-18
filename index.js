@@ -89,9 +89,12 @@ QuickBooks.setOauthVersion('1.0');
  * @param useSandbox - boolean - See https://developer.intuit.com/v2/blog/2014/10/24/intuit-developer-now-offers-quickbooks-sandboxes
  * @param debug - boolean flag to turn on logging of HTTP requests, including headers and body
  * @param minorversion - integer to set minorversion in request
+ * @param oauthversion - the OAuth version ('1.0a' or '2.0')
+ * @param refreshToken - the OAuth 2.0 refresh token
+ * @param refreshTokenCallBack - callback to cache refresh token outside of the object
  * @constructor
  */
-function QuickBooks(consumerKey, consumerSecret, token, tokenSecret, realmId, useSandbox, debug, minorversion, oauthversion, refreshToken) {
+function QuickBooks(consumerKey, consumerSecret, token, tokenSecret, realmId, useSandbox, debug, minorversion, oauthversion, refreshToken, refreshTokenCallBack) {
   var prefix = _.isObject(consumerKey) ? 'consumerKey.' : '';
   this.consumerKey = eval(prefix + 'consumerKey');
   this.consumerSecret = eval(prefix + 'consumerSecret');
@@ -106,6 +109,7 @@ function QuickBooks(consumerKey, consumerSecret, token, tokenSecret, realmId, us
   this.minorversion = eval(prefix + 'minorversion') || 75;
   this.oauthversion = eval(prefix + 'oauthversion') || '1.0a';
   this.refreshToken = eval(prefix + 'refreshToken') || null;
+  this.refreshTokenCallBack = eval(prefix + 'refreshTokenCallBack') || null;
   if (!eval(prefix + 'tokenSecret') && this.oauthversion !== '2.0') {
     throw new Error('tokenSecret not defined');
   }
@@ -134,8 +138,15 @@ QuickBooks.prototype.refreshAccessToken = function (callback) {
     }
   }).then((function (res) {
     var refreshResponse = res.data;
-    this.refreshToken = refreshResponse.refresh_token;
     this.token = refreshResponse.access_token;
+    if (this.refreshToken !== refreshResponse.refresh_token) {
+      this.refreshToken = refreshResponse.refresh_token;
+      if (this.refreshTokenCallBack) {
+        Promise.resolve(this.refreshTokenCallBack(this.refreshToken)).catch((function (e) {
+          if (this.debug) console.log('refreshTokenCallBack failed to persist rotated token:', e);
+        }).bind(this));
+      }
+    }
     if (callback) callback(null, refreshResponse);
   }).bind(this)).catch((function (err) {
     if (callback) callback(err, err.response, err.response ? err.response.data : null);

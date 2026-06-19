@@ -26,14 +26,14 @@ jobs:
     # payload, which would wrongly skip our own team's PRs. head.repo is null
     # for deleted forks, so the comparison safely fails closed (skips).
     #
-    # Dependabot is allowed explicitly: it opens in-repo branch PRs (so it
-    # already satisfies the head-repo check) and runs as a trusted, non-
-    # spoofable GitHub actor with a read-only token. The version-bump step
-    # below also exempts it.
+    # Dependabot PRs use in-repo branches, so they satisfy the head-repo check
+    # and still RUN here (we want their test coverage) — but they are NOT
+    # exempt from the version-bump gate below, so they fail until a human turns
+    # the dependency update into a real, version-bumped release. That keeps
+    # master from drifting out of sync with what's published to npm.
     if: >-
       github.event_name != 'pull_request' ||
-      github.event.pull_request.head.repo.full_name == github.repository ||
-      github.actor == 'dependabot[bot]'
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: self-hosted
     steps:
       # Up-front checkout: required so the local composite actions
@@ -53,14 +53,14 @@ jobs:
           node-major-version: ${{ vars.NODE_MAJOR_VERSION }}
           npm-major-version: ${{ vars.NPM_MAJOR_VERSION }}
 
-      # Version-bump gate (PRs only): @pncit/node-quickbooks is a published
-      # library, so every PR into master must bump package.json's version.
-      #
-      # Dependabot PRs are exempt: they bump dependency versions, never the
-      # package's own version (that happens at release time), so this gate
-      # would fail 100% of them.
+      # Version-bump gate: @pncit/node-quickbooks is a published library, so
+      # every PR into master must bump package.json's version — no exceptions.
+      # Dependabot PRs don't bump the package's own version, so they fail here
+      # by design; a maintainer rolls the dependency update into a versioned
+      # release (bumping the version) to land it. This prevents an unversioned
+      # change from merging and desyncing master from the published npm package.
       - name: Verify version changed
-        if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
+        if: github.event_name == 'pull_request'
         shell: bash
         run: |
           set -euo pipefail

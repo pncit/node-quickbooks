@@ -15,6 +15,15 @@ permissions:
 
 jobs:
   validate:
+    # Push events (merge to master) always validate — that run is what gates
+    # publishing. PR events only run for the repo's own team; fork/outside PRs
+    # skip the job so untrusted code never reaches the self-hosted runner.
+    # NOTE: author_association only exists on pull_request events, so the push
+    # path must be allowed explicitly or publishing (which needs a successful
+    # Validate on push) would never fire.
+    if: >-
+      github.event_name != 'pull_request' ||
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association)
     runs-on: self-hosted
     steps:
       # Up-front checkout: required so the local composite actions

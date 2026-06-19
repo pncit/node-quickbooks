@@ -25,9 +25,15 @@ jobs:
     # latter downgrades private org members to "CONTRIBUTOR" in the event
     # payload, which would wrongly skip our own team's PRs. head.repo is null
     # for deleted forks, so the comparison safely fails closed (skips).
+    #
+    # Dependabot is allowed explicitly: it opens in-repo branch PRs (so it
+    # already satisfies the head-repo check) and runs as a trusted, non-
+    # spoofable GitHub actor with a read-only token. The version-bump step
+    # below also exempts it.
     if: >-
       github.event_name != 'pull_request' ||
-      github.event.pull_request.head.repo.full_name == github.repository
+      github.event.pull_request.head.repo.full_name == github.repository ||
+      github.actor == 'dependabot[bot]'
     runs-on: self-hosted
     steps:
       # Up-front checkout: required so the local composite actions

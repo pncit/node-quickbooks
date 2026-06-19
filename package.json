@@ -1,6 +1,6 @@
 {
   "name": "@pncit/node-quickbooks",
-  "version": "2.0.50",
+  "version": "2.0.51",
   "description": "node.js client for Intuit's IPP QuickBooks V3 API.",
   "main": "index.js",
   "types": "index.d.ts",

@@ -1,0 +1,58 @@
+name: 'Validate codebase'
+description: >-
+  Run the standard npm CI gates against the calling repo: `npm ci`,
+  then `npm run lint`, `npm run typecheck`, `npm test`. Each is
+  expected to be defined as a script in the repo's package.json.
+
+# Vendored from pncit/shared-actions@v1 because this repo is a PUBLIC fork
+# and shared-actions is PRIVATE — a public repo can't reliably clone a
+# private action (and external fork PRs never can). Keep in sync manually if
+# the upstream action changes.
+#
+# Does its own checkout + setup-node so it's self-contained — invoke
+# directly from a job's `steps:` with just `uses:` and the npm-token.
+
+inputs:
+  npm-token:
+    description: 'npm token used for `npm ci` (NODE_AUTH_TOKEN in the install step).'
+    required: true
+  npm-scope:
+    description: 'npm scope (for private packages).'
+    required: false
+    default: '@pncit'
+  registry-url:
+    description: 'npm registry URL.'
+    required: false
+    default: 'https://registry.npmjs.org'
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout
+      uses: actions/checkout@v6
+
+    - name: Setup Node
+      uses: actions/setup-node@v6
+      with:
+        node-version-file: .nvmrc
+        cache: npm
+        registry-url: ${{ inputs.registry-url }}
+        scope: ${{ inputs.npm-scope }}
+
+    - name: Install dependencies
+      shell: bash
+      env:
+        NODE_AUTH_TOKEN: ${{ inputs.npm-token }}
+      run: npm ci
+
+    - name: Lint
+      shell: bash
+      run: npm run lint
+
+    - name: Typecheck
+      shell: bash
+      run: npm run typecheck
+
+    - name: Test
+      shell: bash
+      run: npm test

@@ -17,27 +17,29 @@ jobs:
   validate:
     runs-on: self-hosted
     steps:
+      # Up-front checkout: required so the local composite actions
+      # (./.github/actions/*) exist on the runner before they're referenced,
+      # and gives the version-bump step the base branch to diff against.
+      # The vendored actions live here (not in the private pncit/shared-actions)
+      # because this repo is a PUBLIC fork that can't clone a private action.
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+
       # Env check: fail fast if the runner's Node/npm majors don't match what
       # the repo expects (NODE_MAJOR_VERSION / NPM_MAJOR_VERSION are pncit
       # org-level Actions variables).
-      - uses: pncit/shared-actions/.github/actions/verify-node-toolchain@v1
+      - uses: ./.github/actions/verify-node-toolchain
         with:
           node-major-version: ${{ vars.NODE_MAJOR_VERSION }}
           npm-major-version: ${{ vars.NPM_MAJOR_VERSION }}
 
       # Version-bump gate (PRs only): @pncit/node-quickbooks is a published
-      # library, so every PR into master must bump package.json's version. Needs
-      # its own shallow checkout to diff the base branch's package.json.
+      # library, so every PR into master must bump package.json's version.
       #
       # Dependabot PRs are exempt: they bump dependency versions, never the
       # package's own version (that happens at release time), so this gate
       # would fail 100% of them.
-      - name: Checkout (for version-bump check)
-        if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 2
-
       - name: Verify version changed
         if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
         shell: bash
@@ -76,6 +78,6 @@ jobs:
       # Codebase checks: npm ci + lint + typecheck + test. This action does its
       # own checkout + setup-node (node-version-file: .nvmrc) and matches the
       # @pncit scope / npmjs registry by default.
-      - uses: pncit/shared-actions/.github/actions/validate-codebase@v1
+      - uses: ./.github/actions/validate-codebase
         with:
           npm-token: ${{ secrets.NPM_TOKEN }}

@@ -1,0 +1,102 @@
+name: Validate
+
+on:
+  pull_request:
+    branches: [master]
+  # Also runs on the merge commit so npm-publish.yml can consume this run's
+  # `workflow_run` success instead of re-validating. Running validation here
+  # (not in the publish workflow) means publish never ships a commit that
+  # wasn't validated as-is, and validation is never duplicated.
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    # Push events (merge to master) always validate — that run is what gates
+    # publishing. PR events only run when the PR's head branch lives in THIS
+    # repo (which requires write access); PRs from forks have a different head
+    # repo and skip the job, so untrusted fork code never reaches the
+    # self-hosted runner.
+    #
+    # We gate on head-repo identity rather than author_association because the
+    # latter downgrades private org members to "CONTRIBUTOR" in the event
+    # payload, which would wrongly skip our own team's PRs. head.repo is null
+    # for deleted forks, so the comparison safely fails closed (skips).
+    #
+    # Dependabot is allowed explicitly: it opens in-repo branch PRs (so it
+    # already satisfies the head-repo check) and runs as a trusted, non-
+    # spoofable GitHub actor with a read-only token. The version-bump step
+    # below also exempts it.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository ||
+      github.actor == 'dependabot[bot]'
+    runs-on: self-hosted
+    steps:
+      # Up-front checkout: required so the local composite actions
+      # (./.github/actions/*) exist on the runner before they're referenced,
+      # and gives the version-bump step the base branch to diff against.
+      # The vendored actions live here (not in the private pncit/shared-actions)
+      # because this repo is a PUBLIC fork that can't clone a private action.
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+
+      # Env check: fail fast if the runner's Node/npm majors don't match what
+      # the repo expects (NODE_MAJOR_VERSION / NPM_MAJOR_VERSION are pncit
+      # org-level Actions variables).
+      - uses: ./.github/actions/verify-node-toolchain
+        with:
+          node-major-version: ${{ vars.NODE_MAJOR_VERSION }}
+          npm-major-version: ${{ vars.NPM_MAJOR_VERSION }}
+
+      # Version-bump gate (PRs only): @pncit/node-quickbooks is a published
+      # library, so every PR into master must bump package.json's version.
+      #
+      # Dependabot PRs are exempt: they bump dependency versions, never the
+      # package's own version (that happens at release time), so this gate
+      # would fail 100% of them.
+      - name: Verify version changed
+        if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
+        shell: bash
+        run: |
+          set -euo pipefail
+          CUR=$(node -p "require('./package.json').version || ''")
+
+          # Get the base branch (usually master)
+          BASE_BRANCH="${GITHUB_BASE_REF:-master}"
+          git fetch origin "$BASE_BRANCH:$BASE_BRANCH" || true
+
+          if git rev-parse --verify "$BASE_BRANCH" >/dev/null 2>&1; then
+            PREV=$(git show "$BASE_BRANCH:package.json" 2>/dev/null \
+              | node -p "(() => { const s=require('fs').readFileSync(0,'utf8'); try { return JSON.parse(s).version || '' } catch { return '' } })()" \
+              || true)
+          else
+            PREV=""
+          fi
+
+          if [ -z "$CUR" ]; then
+            echo "::error::No version found in package.json"
+            exit 1
+          fi
+
+          if [ -n "$PREV" ] && [ "$CUR" = "$PREV" ]; then
+            echo "::error::package.json version unchanged ($PREV -> $CUR). Version must be bumped for PRs."
+            exit 1
+          fi
+
+          if [ -z "$PREV" ]; then
+            echo "Could not determine previous version, skipping version check"
+          else
+            echo "Version changed: $PREV -> $CUR ✓"
+          fi
+
+      # Codebase checks: npm ci + lint + typecheck + test. This action does its
+      # own checkout + setup-node (node-version-file: .nvmrc) and matches the
+      # @pncit scope / npmjs registry by default.
+      - uses: ./.github/actions/validate-codebase
+        with:
+          npm-token: ${{ secrets.NPM_TOKEN }}

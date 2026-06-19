@@ -16,14 +16,18 @@ permissions:
 jobs:
   validate:
     # Push events (merge to master) always validate — that run is what gates
-    # publishing. PR events only run for the repo's own team; fork/outside PRs
-    # skip the job so untrusted code never reaches the self-hosted runner.
-    # NOTE: author_association only exists on pull_request events, so the push
-    # path must be allowed explicitly or publishing (which needs a successful
-    # Validate on push) would never fire.
+    # publishing. PR events only run when the PR's head branch lives in THIS
+    # repo (which requires write access); PRs from forks have a different head
+    # repo and skip the job, so untrusted fork code never reaches the
+    # self-hosted runner.
+    #
+    # We gate on head-repo identity rather than author_association because the
+    # latter downgrades private org members to "CONTRIBUTOR" in the event
+    # payload, which would wrongly skip our own team's PRs. head.repo is null
+    # for deleted forks, so the comparison safely fails closed (skips).
     if: >-
       github.event_name != 'pull_request' ||
-      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association)
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: self-hosted
     steps:
       # Up-front checkout: required so the local composite actions

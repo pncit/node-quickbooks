@@ -18,8 +18,9 @@ jobs:
     # Push events (merge to master) always validate — that run is what gates
     # publishing. PR events only run when the PR's head branch lives in THIS
     # repo (which requires write access); PRs from forks have a different head
-    # repo and skip the job, so untrusted fork code never reaches the
-    # self-hosted runner.
+    # repo and skip the job. On the ephemeral GitHub-hosted runner below this
+    # is a POLICY choice, not a runner-safety requirement (fork runs are
+    # sandboxed and get no secrets) — drop the `if` to give fork PRs CI.
     #
     # We gate on head-repo identity rather than author_association because the
     # latter downgrades private org members to "CONTRIBUTOR" in the event
@@ -34,7 +35,11 @@ jobs:
     if: >-
       github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: self-hosted
+    # GitHub-hosted: the org's self-hosted runner group does not accept jobs
+    # from public repos (allows_public_repositories=false, on purpose — it
+    # keeps fork PRs off the fleet), so `self-hosted` here could never be
+    # scheduled. Nothing below depends on runner-local state.
+    runs-on: ubuntu-latest
     steps:
       # Up-front checkout: required so the local composite actions
       # (./.github/actions/*) exist on the runner before they're referenced,
@@ -45,9 +50,16 @@ jobs:
         with:
           fetch-depth: 2
 
-      # Env check: fail fast if the runner's Node/npm majors don't match what
-      # the repo expects (NODE_MAJOR_VERSION / NPM_MAJOR_VERSION are pncit
-      # org-level Actions variables).
+      # Install the repo's Node (.nvmrc) before the toolchain check: the hosted
+      # image's system Node is whatever Ubuntu ships, not necessarily ours.
+      # validate-codebase below runs setup-node again; that's a cache hit.
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+
+      # Env check: fail fast if the Node/npm majors don't match what the repo
+      # expects (NODE_MAJOR_VERSION / NPM_MAJOR_VERSION are pncit org-level
+      # Actions variables). Also catches .nvmrc drifting from the org standard.
       - uses: ./.github/actions/verify-node-toolchain
         with:
           node-major-version: ${{ vars.NODE_MAJOR_VERSION }}

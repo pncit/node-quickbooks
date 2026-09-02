@@ -1,21 +1,39 @@
+# pncit standard Dependabot config — do not tune per repo.
+# Source of truth: pncit/.github/templates/dependabot.yml (the template) and
+# pncit/.github/rollout/audit-dependabot.sh (drift check). Sections present
+# here are the ones whose ecosystem exists in this repo; the values inside
+# them are the org standard.
 version: 2
+
 updates:
-  - package-ecosystem: npm
-    directory: /
+  - package-ecosystem: 'npm'
+    directory: '/'
     schedule:
-      interval: weekly
+      interval: 'weekly'
     open-pull-requests-limit: 5
     groups:
-      dev-dependencies:
-        dependency-type: development
+      # The @pncit libraries arrive together in their own PR, never buried in
+      # the minor/patch roll-up: a bump of an in-house contract is reviewed,
+      # not rubber-stamped.
+      pncit:
+        applies-to: version-updates
+        patterns:
+          - '@pncit/*'
+      # Everything else routine collapses into one PR. Majors stay as
+      # individual PRs for human review.
+      npm-minor-patch:
+        applies-to: version-updates
+        exclude-patterns:
+          - '@pncit/*'
         update-types:
-          - minor
-          - patch
-      production-dependencies:
-        dependency-type: production
-        update-types:
-          - minor
-          - patch
+          - 'minor'
+          - 'patch'
+      # Security advisories are event-driven, not weekly; batch them so a
+      # cluster of advisories is one PR.
+      security:
+        applies-to: security-updates
+        patterns:
+          - '*'
 
   # Workflow action refs, including pncit/shared-actions@v2 and
   # actions/checkout. Dependabot only tracks major tags for actions, so this

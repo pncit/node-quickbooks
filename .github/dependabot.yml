@@ -16,3 +16,16 @@ updates:
         update-types:
           - minor
           - patch
+
+  # Workflow action refs, including pncit/shared-actions@v2 and
+  # actions/checkout. Dependabot only tracks major tags for actions, so this
+  # is a few PRs a year; grouped so a repo gets one PR per round, not one per
+  # action. Nothing else in the org watches for a shared-actions major bump.
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    open-pull-requests-limit: 3
+    groups:
+      actions:
+        patterns: ['*']

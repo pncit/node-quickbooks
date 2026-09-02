@@ -7,10 +7,32 @@ description: >-
   Node version reach `npm ci` and resolve nested optional deps
   differently from the committed lockfile.
 
-# Vendored from pncit/shared-actions@v1 because this repo is a PUBLIC fork
-# and shared-actions is PRIVATE — a public repo can't reliably clone a
-# private action (and external fork PRs never can). Keep in sync manually if
-# the upstream action changes.
+# Standalone use: add to any workflow that calls actions/setup-node:
+#
+#   - uses: actions/setup-node@v7
+#     with:
+#       node-version-file: .nvmrc
+#   - uses: pncit/shared-actions/.github/actions/verify-node-toolchain@v1
+#     with:
+#       node-major-version: ${{ vars.NODE_MAJOR_VERSION }}
+#       npm-major-version: ${{ vars.NPM_MAJOR_VERSION }}
+#
+# `validate-codebase` calls this internally, but only when it is given
+# both node-major-version and npm-major-version; it runs there *after*
+# that action's own setup-node, so it measures the toolchain that will
+# actually run `npm ci`.
+#
+# Invoking it as a top-level workflow step instead measures the runner's
+# *system* node/npm, which is not what a composite doing its own
+# setup-node will use. That gap is why an npm 11 -> 12 upgrade slipped
+# past this gate: it reported npm 11.11.0 from /usr/bin/npm while
+# `npm ci` ran under npm 12 from the tool cache. Prefer passing the
+# versions through to `validate-codebase`.
+
+# Vendored from pncit/shared-actions@v2 (59e838b) because this repo is PUBLIC
+# and shared-actions is PRIVATE — a public repo can't `uses:` a private
+# action. Byte-for-byte identical to upstream apart from this comment;
+# re-copy when upstream changes (see .github/actions/README.md).
 
 inputs:
   node-major-version:

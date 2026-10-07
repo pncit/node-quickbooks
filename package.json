@@ -1,6 +1,6 @@
 {
   "name": "@pncit/node-quickbooks",
-  "version": "2.0.57",
+  "version": "2.0.58",
   "description": "node.js client for Intuit's IPP QuickBooks V3 API.",
   "main": "index.js",
   "types": "index.d.ts",
@@ -14,7 +14,8 @@
   "scripts": {
     "test": "mocha test/refreshTokenCallBack.test.js",
     "lint": "echo \"no lint configured\"",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:example": "mocha test/example.test.js"
   },
   "keywords": [
     "Intuit",

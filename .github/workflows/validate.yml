@@ -74,3 +74,8 @@ jobs:
           npm-token: ${{ secrets.NPM_TOKEN }}
           node-version: ${{ vars.NODE_VERSION }}
           npm-version: ${{ vars.NPM_VERSION }}
+      - name: Validate OAuth example
+        run: |
+          npm ci --prefix example --ignore-scripts
+          npm run test:example
+          npm audit --prefix example

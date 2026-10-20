@@ -32,6 +32,16 @@ updates:
       semver-patch-days: 7
       exclude:
         - '@pncit/*'
+    # @types/node describes the API of the Node runtime the org runs
+    # (NODE_VERSION), so its major is the runtime's major: it moves by hand,
+    # together with the runtime, never on its own. Minors and patches within
+    # that line still arrive through npm-minor-patch. A security run reads
+    # only an ignore's `versions`, never its `update-types`, so this holds
+    # back no advisory fix.
+    ignore:
+      - dependency-name: '@types/node'
+        update-types:
+          - 'version-update:semver-major'
     groups:
       # The @pncit libraries arrive together in their own PR, never buried in
       # the minor/patch roll-up: a bump of an in-house contract is reviewed,
